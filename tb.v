@@ -1,56 +1,86 @@
+//====================================================
+// TESTBENCH
+//====================================================
 module tb;
-reg PCLK;
-reg PRESETn;
+reg clk;
+reg rst;
 reg start;
-reg wr_rd;
-reg [7:0] addr;
-reg [7:0] wdata;
-wire [7:0] rdata;
-wire PSLVERR;
-top dut(.*);
-always #5 PCLK = ~PCLK;
-initial
-begin
-PCLK = 0;
-PRESETn = 0;
-start = 0;
-wr_rd = 0;
-addr = 0;
-wdata = 0;
-#20;
-PRESETn = 1;
-@(posedge PCLK);
-start = 1;
-wr_rd = 1;
-addr = 8'd10;
-wdata = 8'd55;
-@(posedge PCLK);
-start = 0;
-repeat(2)
-@(posedge PCLK);
-$display("WRITE COMPLETED");
-@(posedge PCLK);
-start = 1;
-wr_rd = 0;
-addr = 8'd10;
-@(posedge PCLK);
-start = 0;
-repeat(2)
-@(posedge PCLK);
-$display("READ DATA = %d",rdata);
-@(posedge PCLK);
-start = 1;
-wr_rd = 0;
-addr = 8'hFF;
-@(posedge PCLK);
-start = 0;
-repeat(2)
-@(posedge PCLK);
-if(PSLVERR)
-$display("SLAVE ERROR GENERATED");
-else
-$display("NO ERROR");
-#20;
-$finish;
+reg [7:0] tx_data;
+wire tx;
+wire busy;
+wire [7:0] rx_data;
+wire done;
+//====================================================
+// UART TX
+//====================================================
+uart_tx #(
+    .CLKS_PER_BIT(10)
+)
+TX (
+    .clk(clk),
+    .rst(rst),
+    .start(start),
+    .data(tx_data),
+    .tx(tx),
+    .busy(busy)
+);
+//====================================================
+// UART RX
+//====================================================
+uart_rx #(
+    .CLKS_PER_BIT(10)
+)
+RX (
+    .clk(clk),
+    .rst(rst),
+    .rx(tx),
+    .data(rx_data),
+    .done(done)
+);
+//====================================================
+// CLOCK
+//====================================================
+initial begin
+    clk = 0;
+    forever #5 clk = ~clk;
+end
+//====================================================
+// TEST
+//====================================================
+initial begin
+    rst     = 1;
+    start   = 0;
+    tx_data = 8'h00;
+    #20;
+    rst = 0;
+    // Send ASCII A
+    #20;
+    tx_data = 8'h41;
+    start = 1;
+    #10;
+    start = 0;
+    // Wait for complete UART frame
+    #1200;
+    $display("----------------------------------------");
+    $display("Transmitted Data   = %h", tx_data);
+    $display("Received Data      = %h", rx_data);
+    $display("Received Character = %c", rx_data);
+    $display("RX Done            = %b", done);
+    $display("----------------------------------------");
+    $finish;
+end
+
+//====================================================
+// MONITOR
+//====================================================
+initial begin
+    $monitor(
+        "Time=%0t | TX=%b | Busy=%b | RX_DATA=%h | Done=%b",
+        $time,
+        tx,
+        busy,
+        rx_data,
+        done
+    );
 end
 endmodule
